@@ -2,33 +2,41 @@ const express = require('express');
 const session = require('express-session');
 
 const app = express();
-const port = 3000;
 
-// Session configuration
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Session setup
 app.use(session({
     secret: 'your-secret-key',
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: true
 }));
 
-// Route to handle logout
+// Logout route
 app.get('/logout', (req, res) => {
     req.session.destroy((err) => {
         if (err) {
-            console.error('Error destroying session: ', err);
-            return res.status(500).send('Internal Server Error');
+            return res.status(500).send('Failed to log out');
         }
-        // Redirect to the homepage or login page after logout
+
+        // Redirect to login page after session destruction
         res.redirect('/');
     });
 });
 
-// Placeholder home route
+// Route to handle index (login page)
 app.get('/', (req, res) => {
-    res.send('Welcome to the Pen Friend App. Please log in.');
+    if (req.session.logged_in) {
+        res.send(`Welcome ${req.session.username}! <a href="/logout">Logout</a>`);
+    } else {
+        res.send('<form method="POST" action="/login">Email: <input type="email" name="email2"><br>Password: <input type="password" name="pw2"><br><input type="checkbox" name="remember"> Remember Me<br><input type="submit" value="Login"></form>');
+    }
 });
 
-// Start the server
-app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
+// Add other routes as necessary, such as for login
+
+app.listen(3000, () => {
+    console.log('Server running on port 3000');
 });
