@@ -1,0 +1,72 @@
+INSERT INTO Users VALUES
+('maniac@psycho.com','psych','psych'),
+('meganraj251@gmail.com','tortsBsus','abc123'),
+('meghanarathanraj.is19@bmsce.ac.in','lemone515','abcd1234'),
+('fun@private.ltd','iamfunny','idk'),
+('lmao@gmail.com','whoami','lmaoo'),
+('nidhih.is19@bmsce.ac.in','NidhiHemanth','abcd1234');
+
+INSERT INTO Interests(email) VALUES
+('maniac@psycho.com'),
+('meganraj251@gmail.com'),
+('meghanarathanraj.is19@bmsce.ac.in'),
+('fun@private.ltd'),
+('lmao@gmail.com'),
+('nidhih.is19@bmsce.ac.in');
+
+INSERT INTO Languages(email) VALUES
+('maniac@psycho.com'),
+('meganraj251@gmail.com'),
+('meghanarathanraj.is19@bmsce.ac.in'),
+('fun@private.ltd'),
+('lmao@gmail.com'),
+('nidhih.is19@bmsce.ac.in');
+
+INSERT INTO Penpals(user1,user2) VALUES
+('meganraj251@gmail.com', 'nidhih.is19@bmsce.ac.in'),
+('meganraj251@gmail.com', 'lmao@gmail.com');
+
+INSERT INTO Route(pen_id,sender) VALUES
+(1, 'nidhih.is19@bmsce.ac.in'),
+(1, 'meganraj251@gmail.com'),
+(2, 'meganraj251@gmail.com'),
+(2, 'lmao@gmail.com');
+
+INSERT INTO Messages(route,content) VALUES
+(1,'hi tortsBsus'),
+(2,'hi NidhiHemanth'),
+(3,'whoami lol'),
+(4,'no u');
+
+INSERT INTO Messages(route,content) VALUES
+(1,'dont ignore pls'),
+(2,'smh');
+
+INSERT INTO Interests VALUES
+('meganraj251@gmail.com','gaming'),
+('meganraj251@gmail.com','knit'),
+('meganraj251@gmail.com','draw'),
+('maniac@psycho.com','draw'),
+('maniac@psycho.com','knit'),
+('meghanarathanraj.is19@bmsce.ac.in','draw'),
+('meghanarathanraj.is19@bmsce.ac.in','sing'),
+('fun@private.ltd','paint'),
+('fun@private.ltd','knit'),
+('fun@private.ltd','gaming'),
+('lmao@gmail.com','draw'),
+('nidhih.is19@bmsce.ac.in','gaming');
+
+INSERT INTO Languages VALUES
+('meganraj251@gmail.com','Japanese'),
+('meganraj251@gmail.com','Chinese'),
+('meganraj251@gmail.com','Korean'),
+('maniac@psycho.com','Chinese'),
+('maniac@psycho.com','Japanese'),
+('meghanarathanraj.is19@bmsce.ac.in','Japanese'),
+('fun@private.ltd','Korean'),
+('fun@private.ltd','Hindi'),
+('lmao@gmail.com','Arabic'),
+('lmao@gmail.com','Russian'),
+('lmao@gmail.com','French'),
+('nidhih.is19@bmsce.ac.in','French'),
+('nidhih.is19@bmsce.ac.in','Hindi');

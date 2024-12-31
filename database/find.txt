@@ -1,0 +1,39 @@
+CREATE VIEW my_pals AS
+SELECT y.email, MAX(y.num)-1 AS counters FROM   
+(SELECT COUNT(email) AS num, email 
+FROM Interests
+WHERE interest_name IN   
+(SELECT interest_name FROM Interests  
+WHERE email = 'meganraj251@gmail.com')  
+AND email <> 'meganraj251@gmail.com'  
+GROUP BY email) y
+GROUP BY email
+HAVING MAX(y.num) != 1
+ORDER BY counters DESC;
+
+SELECT * FROM my_pals;
+
+CREATE VIEW potentials AS 
+SELECT DISTINCT my_pals.email, my_pals.counters FROM 
+my_pals NATURAL JOIN Languages 
+WHERE language IN 
+(SELECT language FROM Languages 
+WHERE email = 'meganraj251@gmail.com');
+
+SELECT * FROM potentials;
+
+CREATE VIEW filtered AS 
+SELECT * FROM potentials WHERE 
+!(email IN (SELECT user1 FROM penpals WHERE user2 = 'meganraj251@gmail.com') 
+OR email IN (SELECT user2 FROM penpals WHERE user1 ='meganraj251@gmail.com'));
+
+SELECT email FROM filtered
+WHERE counters =
+(SELECT MAX(counters) FROM filtered) 
+LIMIT 1;
+
+DROP VIEW potentials;
+DROP VIEW my_pals;
+DROP VIEW filtered;
+
+INSERT INTO Penpals (user1, user2) VALUES (X,Y);

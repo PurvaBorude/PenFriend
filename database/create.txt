@@ -1,0 +1,56 @@
+CREATE TABLE Users (
+    email VARCHAR(50) NOT NULL,
+    name VARCHAR(50),
+    password VARCHAR(50),
+    PRIMARY KEY (email) 
+); 
+
+CREATE TABLE Interests(
+    email VARCHAR(50) NOT NULL, 
+    interest_name VARCHAR(50) DEFAULT 'Random',
+    PRIMARY KEY (email, interest_name),
+    FOREIGN KEY (email) REFERENCES Users (email)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+);
+
+CREATE TABLE Languages (
+    email VARCHAR(50) NOT NULL,
+    language VARCHAR(50) DEFAULT 'English',
+    PRIMARY KEY (email, language),
+    FOREIGN KEY (email) REFERENCES Users (email)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+); 
+
+CREATE TABLE Penpals (
+    pen_id INT NOT NULL AUTO_INCREMENT,
+    user1 VARCHAR(50) NOT NULL,
+    user2 VARCHAR(50) NOT NULL,
+    PRIMARY KEY (pen_id),
+    FOREIGN KEY (user1) REFERENCES Users (email),
+    FOREIGN KEY (user2) REFERENCES Users (email)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+); 
+
+CREATE TABLE Route (
+    route INT NOT NULL AUTO_INCREMENT,
+    pen_id INT NOT NULL,
+    sender VARCHAR(50),
+    PRIMARY KEY (route),
+    FOREIGN KEY (pen_id) REFERENCES Penpals (pen_id),
+    FOREIGN KEY (sender) REFERENCES Users (email)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+); 
+
+CREATE TABLE Messages (
+    whens DATETIME DEFAULT CURRENT_TIMESTAMP,  
+    route INT NOT NULL,
+    content TEXT(1000),
+    PRIMARY KEY (route, whens),
+    FOREIGN KEY (route) REFERENCES Route (route)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+); 

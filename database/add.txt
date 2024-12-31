@@ -1,0 +1,42 @@
+//gives route
+
+SELECT route from Route 
+WHERE pen_id = 
+(SELECT pen_id FROM penpals 
+WHERE user1 IN ('meganraj251@gmail.com', 'lmao@gmail.com') 
+AND user2 IN ('meganraj251@gmail.com', 'lmao@gmail.com')) 
+AND sender = 'meganraj251@gmail.com';
+
+//if route not present
+
+INSERT INTO Route (pen_id,sender) VALUES 
+("10","hehe");
+
+SELECT route FROM Route 
+WHERE pen_id = ? AND sender = ?;
+
+//insert Messages
+
+INSERT INTO Messages(route,content) 
+VALUES (?,?);
+
+SELECT content FROM 
+(SELECT MAX(whens) AS time, content FROM Messages 
+WHERE route = 
+(SELECT route FROM Route 
+WHERE sender ='meganraj251@gmail.com' AND pen_id = 2)
+) AS A;
+
+SELECT time FROM 
+(SELECT MAX(whens) AS time, content FROM Messages 
+WHERE route = 
+(SELECT route FROM Route 
+WHERE sender = ? AND pen_id = ?)
+) AS A;
+
+SELECT time FROM 
+(SELECT MAX(whens) AS time, content FROM Messages
+WHERE route = (
+SELECT route FROM Route WHERE sender ='nidhhih.is19@bmsce.ac.in' 
+AND pen_id = "1")
+) AS A;
