@@ -1,171 +1,132 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const session = require('express-session');
-const mysql = require('mysql');
-const app = express();
-const port = 3000;
 
-// Session configuration
+const app = express();
+
+// Middleware to parse JSON
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Session setup
 app.use(session({
     secret: 'your-secret-key',
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: true
 }));
 
-// Create MySQL connection
-const db = mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'DBMS'
+// MongoDB connection
+mongoose.connect('mongodb://localhost:27017/DBMS', {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+}).then(() => console.log('Connected to MongoDB')).catch(err => console.log(err));
+
+// MongoDB Schemas
+const InterestSchema = new mongoose.Schema({
+    email: String,
+    interest_name: String
 });
 
-// Connect to MySQL
-db.connect((err) => {
-    if (err) throw err;
-    console.log('Connected to MySQL!');
+const LanguageSchema = new mongoose.Schema({
+    email: String,
+    language: String
 });
 
-// Route for handling penpal logic
-app.get('/penpals', (req, res) => {
-    const userEmail = req.session.email; // Assuming session stores the email
-    
-    // Check the number of penpals
-    const checkPenpalsQuery = `SELECT * FROM Penpals WHERE user1 = ? OR user2 = ?`;
-    db.query(checkPenpalsQuery, [userEmail, userEmail], (err, result) => {
-        if (err) {
-            console.error(err);
-            return res.status(500).send('Error checking penpals');
-        }
+const PenpalSchema = new mongoose.Schema({
+    user1: String,
+    user2: String
+});
 
-        if (result.length < 3) {
-            // Create my_pals view
-            const createMyPalsView = `
-                CREATE VIEW my_pals AS
-                SELECT y.email, MAX(y.num) - 1 AS counters
-                FROM (SELECT COUNT(email) AS num, email 
-                      FROM Interests
-                      WHERE interest_name IN (SELECT interest_name FROM Interests WHERE email = ?)  
-                        AND email <> ?
-                      GROUP BY email) y
-                GROUP BY email
-                ORDER BY counters DESC
-            `;
-            db.query(createMyPalsView, [userEmail, userEmail], (err, result) => {
-                if (err) {
-                    console.error(err);
-                    return res.status(500).send('Error creating my_pals view');
-                }
+const Interest = mongoose.model('Interest', InterestSchema);
+const Language = mongoose.model('Language', LanguageSchema);
+const Penpal = mongoose.model('Penpal', PenpalSchema);
 
-                // Create potentials view
-                const createPotentialsView = `
-                    CREATE VIEW potentials AS
-                    SELECT DISTINCT my_pals.email, my_pals.counters
-                    FROM my_pals
-                    NATURAL JOIN Languages
-                    WHERE language IN (SELECT language FROM Languages WHERE email = ?)
-                `;
-                db.query(createPotentialsView, [userEmail], (err, result) => {
-                    if (err) {
-                        console.error(err);
-                        return res.status(500).send('Error creating potentials view');
-                    }
+// Route to handle the logic
+app.get('/create-penpal', async (req, res) => {
+    const userEmail = req.session.email;
 
-                    // Create filtered view
-                    const createFilteredView = `
-                        CREATE VIEW filtered AS
-                        SELECT * FROM potentials
-                        WHERE !(email IN (SELECT user1 FROM Penpals WHERE user2 = ?)
-                        OR email IN (SELECT user2 FROM Penpals WHERE user1 = ?))
-                    `;
-                    db.query(createFilteredView, [userEmail, userEmail], (err, result) => {
-                        if (err) {
-                            console.error(err);
-                            return res.status(500).send('Error creating filtered view');
-                        }
-
-                        // Fetch the best match
-                        const fetchBestMatch = `
-                            SELECT email FROM filtered
-                            WHERE counters = (SELECT MAX(counters) FROM filtered)
-                            LIMIT 1
-                        `;
-                        db.query(fetchBestMatch, (err, result) => {
-                            if (err) {
-                                console.error(err);
-                                return res.status(500).send('Error fetching best match');
-                            }
-
-                            if (result.length > 0) {
-                                const matchedEmail = result[0].email;
-
-                                // Insert penpal relationship
-                                const insertPenpalQuery = `
-                                    INSERT INTO Penpals (user1, user2)
-                                    VALUES (?, ?)
-                                `;
-                                db.query(insertPenpalQuery, [userEmail, matchedEmail], (err, result) => {
-                                    if (err) {
-                                        console.error(err);
-                                        return res.status(500).send('Error inserting penpal');
-                                    }
-
-                                    // Clean up views
-                                    const dropViews = [
-                                        'DROP VIEW my_pals',
-                                        'DROP VIEW potentials',
-                                        'DROP VIEW filtered'
-                                    ];
-
-                                    dropViews.forEach((query) => {
-                                        db.query(query, (err, result) => {
-                                            if (err) console.error(err);
-                                        });
-                                    });
-
-                                    // Fetch all penpals for the user
-                                    const fetchAllPenpals = `
-                                        SELECT * FROM Penpals
-                                        WHERE user1 = ? OR user2 = ?
-                                    `;
-                                    db.query(fetchAllPenpals, [userEmail, userEmail], (err, result) => {
-                                        if (err) {
-                                            console.error(err);
-                                            return res.status(500).send('Error fetching penpals');
-                                        }
-
-                                        req.session.numOfPenpals = result.length;
-                                        let i = 1;
-                                        result.forEach((row) => {
-                                            const palEmail = (row.user1 !== userEmail) ? row.user1 : row.user2;
-                                            req.session[`pal_${i}`] = palEmail;
-                                            i++;
-                                        });
-
-                                        // Redirect to dashboard after success
-                                        res.redirect('/dashboard');
-                                    });
-                                });
-                            } else {
-                                console.log('No matching penpals found.');
-                                res.send('hello bye');
-                            }
-                        });
-                    });
-                });
-            });
-        } else {
-            // User already has 3 penpals
-            res.redirect('/dashboard');
-        }
+    // Check the existing penpals
+    const existingPenpals = await Penpal.find({
+        $or: [{ user1: userEmail }, { user2: userEmail }]
     });
+
+    if (existingPenpals.length < 3) {
+        // Create "my_pals" equivalent: Get users with common interests
+        const interests = await Interest.find({ email: userEmail });
+
+        const potentialPals = await Interest.aggregate([
+            {
+                $match: {
+                    interest_name: { $in: interests.map(i => i.interest_name) },
+                    email: { $ne: userEmail }
+                }
+            },
+            {
+                $group: {
+                    _id: '$email',
+                    count: { $sum: 1 }
+                }
+            },
+            { $sort: { count: -1 } }
+        ]);
+
+        // Create "potentials" equivalent: Users with common languages
+        const languages = await Language.find({ email: userEmail });
+
+        const filteredPals = await Language.aggregate([
+            {
+                $match: {
+                    language: { $in: languages.map(l => l.language) }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'interests',
+                    localField: 'email',
+                    foreignField: 'email',
+                    as: 'interests'
+                }
+            },
+            {
+                $match: {
+                    'interests.email': { $nin: existingPenpals.map(p => p.user1) }
+                }
+            }
+        ]);
+
+        if (filteredPals.length > 0) {
+            const newPenpal = filteredPals[0]; // Taking the first one as per your logic
+            const newPenpalEntry = new Penpal({
+                user1: userEmail,
+                user2: newPenpal.email
+            });
+
+            await newPenpalEntry.save();
+        } else {
+            console.log('No potential penpals found');
+        }
+
+        // Update session with penpal info
+        req.session.numOfPenpals = existingPenpals.length;
+        let i = 1;
+        for (const penpal of existingPenpals) {
+            if (penpal.user1 !== userEmail) {
+                req.session[`pal_${i}`] = penpal.user1;
+            } else {
+                req.session[`pal_${i}`] = penpal.user2;
+            }
+            i++;
+        }
+    }
+
+    res.redirect('/dashboard');
 });
 
-// Route for dashboard
+// Dashboard route (for demonstration)
 app.get('/dashboard', (req, res) => {
-    res.send('Welcome to your Pen Pal Dashboard!');
+    res.send(`You have ${req.session.numOfPenpals} penpals.`);
 });
 
-// Start the server
-app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
+app.listen(3000, () => {
+    console.log('Server running on port 3000');
 });
