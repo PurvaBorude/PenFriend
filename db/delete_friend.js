@@ -1,118 +1,97 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const session = require('express-session');
-const mysql = require('mysql');
-const app = express();
-const port = 3000;
 
-// Middleware to parse URL-encoded data (for form submissions)
+const app = express();
+
+// Middleware to parse JSON
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-// Session configuration
+
+// Session setup
 app.use(session({
     secret: 'your-secret-key',
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: true
 }));
 
-// Create MySQL connection
-const db = mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'DBMS'
+// MongoDB connection
+mongoose.connect('mongodb://localhost:27017/DBMS', {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+}).then(() => console.log('Connected to MongoDB')).catch(err => console.log(err));
+
+// MongoDB Schemas
+const UserSchema = new mongoose.Schema({
+    email: String,
+    password: String,
+    username: String
 });
 
-// Connect to MySQL
-db.connect((err) => {
-    if (err) throw err;
-    console.log('Connected to MySQL!');
+const PenpalSchema = new mongoose.Schema({
+    user1: String,
+    user2: String
 });
 
-// Route to handle friend deletion
-app.get('/deleteFriend', (req, res) => {
-    const pw = req.query.confirm_delete; // Password input from query parameter
-    const buttonId = req.query.button; // Identifies which pal to delete
+const RouteSchema = new mongoose.Schema({
+    pen_id: mongoose.Schema.Types.ObjectId,
+    user1: String,
+    user2: String
+});
 
-    let deleteEmail;
-    if (buttonId === '1') deleteEmail = req.session['pal_1'];
-    if (buttonId === '2') deleteEmail = req.session['pal_2'];
-    if (buttonId === '3') deleteEmail = req.session['pal_3'];
-    if (buttonId === '4') deleteEmail = req.session['pal_4'];
+const User = mongoose.model('User', UserSchema);
+const Penpal = mongoose.model('Penpal', PenpalSchema);
+const Route = mongoose.model('Route', RouteSchema);
 
-    const email = req.session.email;
+// Route to handle delete penpal logic
+app.get('/delete-penpal', async (req, res) => {
+    const userEmail = req.session.email;
+    const password = req.query.confirm_delete;
+    const buttonNumber = req.query.button1 || req.query.button2 || req.query.button3 || req.query.button4;
+    const palIndex = `pal_${buttonNumber}`;
+    const bye = req.session[palIndex];
 
-    // Verify password
-    const verifyPasswordQuery = `SELECT * FROM Users WHERE email = ? AND password = ?`;
-    db.query(verifyPasswordQuery, [email, pw], (err, result) => {
-        if (err) {
-            console.error(err);
-            return res.status(500).send('Error verifying password');
-        }
+    const user = await User.findOne({ email: userEmail, password: password });
 
-        if (result.length > 0) {
-            // Delete from the Route table where penpals match
-            const deleteRouteQuery = `
-                DELETE FROM Route
-                WHERE pen_id IN (
-                    SELECT pen_id FROM Penpals
-                    WHERE (user1 = ? AND user2 = ?) OR (user1 = ? AND user2 = ?)
-                )
-            `;
-            db.query(deleteRouteQuery, [email, deleteEmail, deleteEmail, email], (err, result) => {
-                if (err) {
-                    console.error(err);
-                    return res.status(500).send('Error deleting from Route table');
-                }
+    if (user) {
+        // Delete Route and Penpal entries
+        await Route.deleteMany({
+            pen_id: { $in: await Penpal.aggregate([
+                { $match: { $or: [{ user1: userEmail, user2: bye }, { user1: bye, user2: userEmail }] } },
+                { $project: { pen_id: 1 } }
+            ]) }
+        });
 
-                // Delete from Penpals table
-                const deletePenpalsQuery = `
-                    DELETE FROM Penpals
-                    WHERE pen_id IN (
-                        SELECT pen_id FROM Penpals
-                        WHERE (user1 = ? AND user2 = ?) OR (user1 = ? AND user2 = ?)
-                    )
-                `;
-                db.query(deletePenpalsQuery, [email, deleteEmail, deleteEmail, email], (err, result) => {
-                    if (err) {
-                        console.error(err);
-                        return res.status(500).send('Error deleting from Penpals table');
-                    }
+        await Penpal.deleteMany({
+            $or: [{ user1: userEmail, user2: bye }, { user1: bye, user2: userEmail }]
+        });
+    }
 
-                    // Fetch updated penpals for the user
-                    const fetchPenpalsQuery = `SELECT * FROM Penpals WHERE user1 = ? OR user2 = ?`;
-                    db.query(fetchPenpalsQuery, [email, email], (err, result) => {
-                        if (err) {
-                            console.error(err);
-                            return res.status(500).send('Error fetching updated penpals');
-                        }
-
-                        req.session.numOfPenpals = result.length;
-
-                        // Store the updated penpals in session
-                        let i = 1;
-                        result.forEach((row) => {
-                            const palEmail = (row.user1 !== email) ? row.user1 : row.user2;
-                            req.session[`pal_${i}`] = palEmail;
-                            i++;
-                        });
-
-                        // Redirect to the dashboard
-                        res.redirect('/dashboard');
-                    });
-                });
-            });
-        } else {
-            // Password incorrect
-            res.status(400).send('Incorrect password');
-        }
+    // Update the session with the remaining penpals
+    const penpals = await Penpal.find({
+        $or: [{ user1: userEmail }, { user2: userEmail }]
     });
+
+    req.session.numOfPenpals = penpals.length;
+
+    let i = 1;
+    penpals.forEach(penpal => {
+        if (penpal.user1 !== userEmail) {
+            req.session[`pal_${i}`] = penpal.user1;
+        } else {
+            req.session[`pal_${i}`] = penpal.user2;
+        }
+        i++;
+    });
+
+    res.redirect('/dashboard');
 });
 
-// Route for dashboard
+// Dashboard route (for demonstration)
 app.get('/dashboard', (req, res) => {
-    res.send('Welcome to your Pen Pal Dashboard!');
+    res.send(`You have ${req.session.numOfPenpals} penpals.`);
 });
 
-// Start the server
-app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
+app.listen(3000, () => {
+    console.log('Server running on port 3000');
 });
