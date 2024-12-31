@@ -1,99 +1,66 @@
 const express = require('express');
-const mysql = require('mysql2');
-const bodyParser = require('body-parser');
+const mongoose = require('mongoose');
 const session = require('express-session');
-
+const bcrypt = require('bcrypt');
 const app = express();
 const port = 3000;
 
-// Middleware for parsing request bodies
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
+// MongoDB connection
+mongoose.connect('mongodb://localhost:27017/DBMS', { useNewUrlParser: true, useUnifiedTopology: true })
+    .then(() => console.log('Connected to MongoDB!'))
+    .catch(err => console.log('MongoDB connection error:', err));
 
-// Session configuration
+// Define User schema
+const userSchema = new mongoose.Schema({
+    firstName: String,
+    lastName: String,
+    email: { type: String, unique: true },
+    phoneNo: String,
+    password: String,
+    date: { type: Date, default: Date.now }
+});
+
+const User = mongoose.model('User', userSchema);
+
+// Middleware to parse URL-encoded data
+app.use(express.urlencoded({ extended: true }));
 app.use(session({
-    secret: 'your-secret-key',
+    secret: 'yourSecretKey',
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: true
 }));
 
-// MySQL Database Connection
-const db = mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'DBMS',
-});
+// User Registration Route
+app.post('/register', async (req, res) => {
+    const { firstName, lastName, email, phoneNo, password } = req.body;
 
-db.connect((err) => {
-    if (err) {
-        console.error('Database connection failed: ' + err.stack);
-        return;
-    }
-    console.log('Connected to MySQL database');
-});
-
-// POST route to handle registration
-app.post('/register', (req, res) => {
-    const { name, email, pw } = req.body;
-
-    // Check if the email already exists
-    const checkEmailQuery = 'SELECT * FROM `Users` WHERE email = ?';
-    db.execute(checkEmailQuery, [email], (err, result) => {
-        if (err) {
-            console.error('Error querying database: ', err);
-            return res.status(500).send('Internal Server Error');
+    try {
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            return res.status(400).send('Email already exists');
         }
 
-        if (result.length === 0) {
-            // Insert new user into Users table
-            const insertUserQuery = 'INSERT INTO `Users` (`name`, `email`, `password`) VALUES (?, ?, ?)';
-            db.execute(insertUserQuery, [name, email, pw], (err, result) => {
-                if (err) {
-                    console.error('Error inserting user: ', err);
-                    return res.status(500).send('Internal Server Error');
-                }
+        const hashedPassword = await bcrypt.hash(password, 10);
 
-                // Insert empty interests and languages for new user
-                const insertInterestsQuery = 'INSERT INTO `Interests` (`email`) VALUES (?)';
-                db.execute(insertInterestsQuery, [email], (err) => {
-                    if (err) {
-                        console.error('Error inserting interests: ', err);
-                    }
-                });
+        const newUser = new User({
+            firstName,
+            lastName,
+            email,
+            phoneNo,
+            password: hashedPassword
+        });
 
-                const insertLanguagesQuery = 'INSERT INTO `Languages` (`email`) VALUES (?)';
-                db.execute(insertLanguagesQuery, [email], (err) => {
-                    if (err) {
-                        console.error('Error inserting languages: ', err);
-                    }
-                });
+        await newUser.save();
 
-                // Set session variables
-                req.session.logged_in = true;
-                req.session.username = name;
-                req.session.email = email;
-                req.session.user_pw = pw;
-
-                // Redirect user to home page or wherever you want
-                res.redirect('/home');
-            });
-        } else {
-            res.status(400).send('Email already exists!');
-        }
-    });
-});
-
-// Placeholder home route
-app.get('/home', (req, res) => {
-    if (req.session.logged_in) {
-        res.send(`Welcome, ${req.session.username}`);
-    } else {
-        res.redirect('/');
+        req.session.email = email;  // Save the email in the session
+        res.redirect('/dashboard');
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Error registering user');
     }
 });
 
-// Start the server
+// Start server
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
 });
